@@ -1,0 +1,1735 @@
+openapi: 3.0.3
+info:
+  title: Finora API
+  description: |
+    API para Finora - Aplicación de finanzas personales simplificadas.
+
+    ## Autenticación
+    Esta API utiliza Supabase Auth con JWT Bearer tokens.
+    Incluye el header `Authorization: Bearer <token>` en todas las requests autenticadas.
+
+    ## Respuestas Estándar
+    Todas las respuestas incluyen:
+    - `success`: boolean indicando éxito/error
+    - En errores: `error.code` y `error.message`
+  version: 1.0.0
+  contact:
+    name: Finora Team
+    email: api@finora.app
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development
+  - url: https://staging.finora.app/api
+    description: Staging
+  - url: https://finora.app/api
+    description: Production
+
+tags:
+  - name: Auth
+    description: Autenticación y gestión de usuarios
+  - name: Transactions
+    description: Gestión de gastos e ingresos
+  - name: Debts
+    description: Control de deudas
+  - name: Goals
+    description: Metas de ahorro
+  - name: Subscriptions
+    description: Gestión de suscripciones
+  - name: Dashboard
+    description: Métricas y reportes
+
+paths:
+  # ============================================
+  # AUTH ENDPOINTS
+  # ============================================
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Registrar nuevo usuario
+      description: Crea una nueva cuenta de usuario con email y contraseña
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: "usuario@ejemplo.com"
+              password: "MiPassword123"
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Error de validación o email ya existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                emailExists:
+                  value:
+                    success: false
+                    error:
+                      code: "EMAIL_EXISTS"
+                      message: "Este email ya está registrado"
+                weakPassword:
+                  value:
+                    success: false
+                    error:
+                      code: "WEAK_PASSWORD"
+                      message: "La contraseña debe tener al menos 8 caracteres"
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesión
+      description: Autentica al usuario y retorna tokens de sesión
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Cerrar sesión
+      description: Invalida la sesión actual
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sesión cerrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Solicitar recuperación de contraseña
+      description: Envía email con link de recuperación
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Email enviado (si existe)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /auth/profile:
+    get:
+      tags: [Auth]
+      summary: Obtener perfil de usuario
+      operationId: getProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    patch:
+      tags: [Auth]
+      summary: Actualizar perfil de usuario
+      operationId: updateProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        '200':
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================
+  # TRANSACTIONS ENDPOINTS
+  # ============================================
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: Listar transacciones
+      description: Obtiene lista paginada de transacciones del usuario
+      operationId: listTransactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense, all]
+            default: all
+        - name: category_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Lista de transacciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Transactions]
+      summary: Crear transacción
+      description: Registra un nuevo gasto o ingreso
+      operationId: createTransaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Transacción creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /transactions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    get:
+      tags: [Transactions]
+      summary: Obtener transacción
+      operationId: getTransaction
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Detalle de transacción
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Transactions]
+      summary: Actualizar transacción
+      operationId: updateTransaction
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTransactionRequest'
+      responses:
+        '200':
+          description: Transacción actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Transactions]
+      summary: Eliminar transacción
+      operationId: deleteTransaction
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Transacción eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /categories:
+    get:
+      tags: [Transactions]
+      summary: Listar categorías
+      description: Obtiene lista de categorías predefinidas
+      operationId: listCategories
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de categorías
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListResponse'
+
+  # ============================================
+  # DEBTS ENDPOINTS
+  # ============================================
+  /debts:
+    get:
+      tags: [Debts]
+      summary: Listar deudas
+      operationId: listDebts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, paid, all]
+            default: active
+      responses:
+        '200':
+          description: Lista de deudas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtListResponse'
+
+    post:
+      tags: [Debts]
+      summary: Crear deuda
+      operationId: createDebt
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDebtRequest'
+      responses:
+        '201':
+          description: Deuda creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtResponse'
+
+  /debts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    get:
+      tags: [Debts]
+      summary: Obtener deuda con historial de pagos
+      operationId: getDebt
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Detalle de deuda
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtDetailResponse'
+
+    patch:
+      tags: [Debts]
+      summary: Actualizar deuda
+      operationId: updateDebt
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDebtRequest'
+      responses:
+        '200':
+          description: Deuda actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtResponse'
+
+    delete:
+      tags: [Debts]
+      summary: Eliminar deuda
+      operationId: deleteDebt
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deuda eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /debts/{id}/payments:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    post:
+      tags: [Debts]
+      summary: Registrar pago a deuda
+      operationId: createDebtPayment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDebtPaymentRequest'
+      responses:
+        '201':
+          description: Pago registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtPaymentResponse'
+
+  /debts/{id}/mark-paid:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    post:
+      tags: [Debts]
+      summary: Marcar deuda como pagada
+      operationId: markDebtPaid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Deuda marcada como pagada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtResponse'
+
+  # ============================================
+  # GOALS ENDPOINTS
+  # ============================================
+  /goals:
+    get:
+      tags: [Goals]
+      summary: Listar metas de ahorro
+      operationId: listGoals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, completed, all]
+            default: active
+      responses:
+        '200':
+          description: Lista de metas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalListResponse'
+
+    post:
+      tags: [Goals]
+      summary: Crear meta de ahorro
+      operationId: createGoal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoalRequest'
+      responses:
+        '201':
+          description: Meta creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+
+  /goals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    get:
+      tags: [Goals]
+      summary: Obtener meta con detalle de progreso
+      operationId: getGoal
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Detalle de meta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalDetailResponse'
+
+    patch:
+      tags: [Goals]
+      summary: Actualizar meta
+      operationId: updateGoal
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGoalRequest'
+      responses:
+        '200':
+          description: Meta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+
+    delete:
+      tags: [Goals]
+      summary: Eliminar meta
+      operationId: deleteGoal
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Meta eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /goals/{id}/contributions:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    post:
+      tags: [Goals]
+      summary: Registrar aportación a meta
+      operationId: createGoalContribution
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateContributionRequest'
+      responses:
+        '201':
+          description: Aportación registrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContributionResponse'
+
+  /goals/{id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    post:
+      tags: [Goals]
+      summary: Marcar meta como completada
+      operationId: markGoalCompleted
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Meta completada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalResponse'
+
+  # ============================================
+  # SUBSCRIPTIONS ENDPOINTS
+  # ============================================
+  /subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: Listar suscripciones
+      operationId: listSubscriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, cancelled, all]
+            default: active
+      responses:
+        '200':
+          description: Lista de suscripciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionListResponse'
+
+    post:
+      tags: [Subscriptions]
+      summary: Crear suscripción
+      operationId: createSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSubscriptionRequest'
+      responses:
+        '201':
+          description: Suscripción creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+
+  /subscriptions/summary:
+    get:
+      tags: [Subscriptions]
+      summary: Obtener resumen de gastos en suscripciones
+      operationId: getSubscriptionsSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Resumen de suscripciones
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionsSummaryResponse'
+
+  /subscriptions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    patch:
+      tags: [Subscriptions]
+      summary: Actualizar suscripción
+      operationId: updateSubscription
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSubscriptionRequest'
+      responses:
+        '200':
+          description: Suscripción actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+
+    delete:
+      tags: [Subscriptions]
+      summary: Eliminar suscripción
+      operationId: deleteSubscription
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Suscripción eliminada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessMessage'
+
+  /subscriptions/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/ResourceId'
+
+    post:
+      tags: [Subscriptions]
+      summary: Marcar suscripción como cancelada
+      operationId: cancelSubscription
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Suscripción cancelada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionResponse'
+
+  # ============================================
+  # DASHBOARD ENDPOINTS
+  # ============================================
+  /dashboard/balance:
+    get:
+      tags: [Dashboard]
+      summary: Obtener balance mensual
+      operationId: getMonthlyBalance
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Balance mensual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+
+  /dashboard/expenses-by-category:
+    get:
+      tags: [Dashboard]
+      summary: Obtener gastos por categoría
+      operationId: getExpensesByCategory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          schema:
+            type: integer
+        - name: year
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Gastos agrupados por categoría
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpensesByCategoryResponse'
+
+  /dashboard/debts-summary:
+    get:
+      tags: [Dashboard]
+      summary: Obtener resumen de deudas
+      operationId: getDebtsSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Resumen de deudas activas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DebtsSummaryResponse'
+
+  /dashboard/goals-summary:
+    get:
+      tags: [Dashboard]
+      summary: Obtener resumen de metas
+      operationId: getGoalsSummary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Resumen de metas de ahorro
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoalsSummaryResponse'
+
+  /dashboard/upcoming-charges:
+    get:
+      tags: [Dashboard]
+      summary: Obtener próximos cargos de suscripciones
+      operationId: getUpcomingCharges
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: days_ahead
+          in: query
+          schema:
+            type: integer
+            default: 30
+            maximum: 90
+      responses:
+        '200':
+          description: Próximos cargos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpcomingChargesResponse'
+
+  /dashboard/comparison:
+    get:
+      tags: [Dashboard]
+      summary: Obtener comparativa mes actual vs anterior
+      operationId: getMonthComparison
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Comparativa de gastos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MonthComparisonResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    LimitParam:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+  responses:
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "Token inválido o expirado"
+
+    NotFound:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "Recurso no encontrado"
+
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    # ==================== Common ====================
+    ErrorResponse:
+      type: object
+      required: [success, error]
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    SuccessMessage:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        has_more:
+          type: boolean
+
+    # ==================== Auth ====================
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/User'
+        session:
+          type: object
+          properties:
+            access_token:
+              type: string
+            refresh_token:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+
+    ProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        profile:
+          $ref: '#/components/schemas/Profile'
+
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        currency_symbol:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        currency_symbol:
+          type: string
+          maxLength: 5
+
+    # ==================== Transactions ====================
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [income, expense]
+        amount:
+          type: number
+          format: double
+        category_id:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+        source:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+        created_at:
+          type: string
+          format: date-time
+
+    CreateTransactionRequest:
+      type: object
+      required: [type, amount]
+      properties:
+        type:
+          type: string
+          enum: [income, expense]
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          maximum: 999999999.99
+        category_id:
+          type: string
+          format: uuid
+          description: Required for expenses
+        source:
+          type: string
+          maxLength: 100
+          description: For income transactions
+        description:
+          type: string
+          maxLength: 255
+        date:
+          type: string
+          format: date
+
+    UpdateTransactionRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        category_id:
+          type: string
+          format: uuid
+        source:
+          type: string
+        description:
+          type: string
+        date:
+          type: string
+          format: date
+
+    TransactionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        transaction:
+          $ref: '#/components/schemas/Transaction'
+
+    TransactionListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+
+    CategoryListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+
+    # ==================== Debts ====================
+    Debt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        total_amount:
+          type: number
+        paid_amount:
+          type: number
+        remaining_amount:
+          type: number
+        creditor:
+          type: string
+        description:
+          type: string
+        due_date:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, paid]
+        created_at:
+          type: string
+          format: date-time
+
+    DebtPayment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        debt_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        date:
+          type: string
+          format: date
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateDebtRequest:
+      type: object
+      required: [total_amount, creditor]
+      properties:
+        total_amount:
+          type: number
+          minimum: 0.01
+        creditor:
+          type: string
+          maxLength: 100
+        due_date:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 255
+
+    UpdateDebtRequest:
+      type: object
+      properties:
+        total_amount:
+          type: number
+        creditor:
+          type: string
+        due_date:
+          type: string
+          format: date
+        description:
+          type: string
+
+    CreateDebtPaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          minimum: 0.01
+        date:
+          type: string
+          format: date
+        note:
+          type: string
+          maxLength: 255
+
+    DebtResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        debt:
+          $ref: '#/components/schemas/Debt'
+
+    DebtDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        debt:
+          $ref: '#/components/schemas/Debt'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebtPayment'
+
+    DebtPaymentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        payment:
+          $ref: '#/components/schemas/DebtPayment'
+        debt:
+          $ref: '#/components/schemas/Debt'
+
+    DebtListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        debts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Debt'
+        summary:
+          type: object
+          properties:
+            total_active:
+              type: integer
+            total_remaining:
+              type: number
+
+    # ==================== Goals ====================
+    Goal:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        target_amount:
+          type: number
+        current_amount:
+          type: number
+        remaining_amount:
+          type: number
+        progress_percentage:
+          type: number
+        target_date:
+          type: string
+          format: date
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, completed]
+        suggested_monthly:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+    Contribution:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        goal_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        date:
+          type: string
+          format: date
+        note:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateGoalRequest:
+      type: object
+      required: [name, target_amount]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        target_amount:
+          type: number
+          minimum: 0.01
+        target_date:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 255
+
+    UpdateGoalRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        target_amount:
+          type: number
+        target_date:
+          type: string
+          format: date
+        description:
+          type: string
+
+    CreateContributionRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          minimum: 0.01
+        date:
+          type: string
+          format: date
+        note:
+          type: string
+          maxLength: 255
+
+    GoalResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        goal:
+          $ref: '#/components/schemas/Goal'
+
+    GoalDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        goal:
+          allOf:
+            - $ref: '#/components/schemas/Goal'
+            - type: object
+              properties:
+                days_remaining:
+                  type: integer
+                contributions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Contribution'
+
+    ContributionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        contribution:
+          $ref: '#/components/schemas/Contribution'
+        goal:
+          $ref: '#/components/schemas/Goal'
+
+    GoalListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goal'
+        summary:
+          type: object
+          properties:
+            total_active:
+              type: integer
+            total_saved:
+              type: number
+            total_target:
+              type: number
+
+    # ==================== Subscriptions ====================
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+          enum: [monthly, yearly]
+        monthly_equivalent:
+          type: number
+        next_billing_date:
+          type: string
+          format: date
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        cancelled_at:
+          type: string
+          format: date-time
+
+    CreateSubscriptionRequest:
+      type: object
+      required: [name, amount, frequency, next_billing_date]
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        amount:
+          type: number
+          minimum: 0.01
+        frequency:
+          type: string
+          enum: [monthly, yearly]
+        next_billing_date:
+          type: string
+          format: date
+        description:
+          type: string
+          maxLength: 255
+
+    UpdateSubscriptionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        amount:
+          type: number
+        frequency:
+          type: string
+          enum: [monthly, yearly]
+        next_billing_date:
+          type: string
+          format: date
+        description:
+          type: string
+
+    SubscriptionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+        monthly_savings:
+          type: number
+          description: Shown when subscription is cancelled
+
+    SubscriptionListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Subscription'
+        summary:
+          type: object
+          properties:
+            total_monthly:
+              type: number
+            upcoming_7_days:
+              type: array
+              items:
+                $ref: '#/components/schemas/Subscription'
+
+    SubscriptionsSummaryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          type: object
+          properties:
+            total_monthly:
+              type: number
+            total_yearly:
+              type: number
+            count:
+              type: integer
+            breakdown:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  monthly:
+                    type: number
+
+    # ==================== Dashboard ====================
+    BalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        balance:
+          type: object
+          properties:
+            month:
+              type: integer
+            year:
+              type: integer
+            total_income:
+              type: number
+            total_expenses:
+              type: number
+            balance:
+              type: number
+            transaction_count:
+              type: integer
+
+    ExpensesByCategoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        expenses_by_category:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              amount:
+                type: number
+              percentage:
+                type: number
+              color:
+                type: string
+        total:
+          type: number
+
+    DebtsSummaryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        debts_summary:
+          type: object
+          properties:
+            total_active_debts:
+              type: integer
+            total_remaining:
+              type: number
+            next_due:
+              type: object
+              properties:
+                creditor:
+                  type: string
+                amount:
+                  type: number
+                due_date:
+                  type: string
+                  format: date
+                days_until_due:
+                  type: integer
+            debts:
+              type: array
+              items:
+                $ref: '#/components/schemas/Debt'
+
+    GoalsSummaryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        goals_summary:
+          type: object
+          properties:
+            total_active_goals:
+              type: integer
+            total_saved:
+              type: number
+            total_target:
+              type: number
+            overall_progress:
+              type: number
+            goals:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  progress:
+                    type: number
+                  current:
+                    type: number
+                  target:
+                    type: number
+
+    UpcomingChargesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        upcoming_charges:
+          type: object
+          properties:
+            total:
+              type: number
+            subscriptions:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  amount:
+                    type: number
+                  date:
+                    type: string
+                    format: date
+                  days_until:
+                    type: integer
+
+    MonthComparisonResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        comparison:
+          type: object
+          properties:
+            current_month:
+              type: object
+              properties:
+                month:
+                  type: string
+                total:
+                  type: number
+            previous_month:
+              type: object
+              properties:
+                month:
+                  type: string
+                total:
+                  type: number
+            difference:
+              type: number
+            percentage_change:
+              type: number
+            trend:
+              type: string
+              enum: [up, down, stable]
+            top_changes:
+              type: array
+              items:
+                type: object
+                properties:
+                  category:
+                    type: string
+                  change:
+                    type: number
+                  percentage:
+                    type: number
