@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-const fs = require('fs');
-const path = require('path');
-const { spawn } = require('child_process');
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // =========== VARIABLES DE ENTORNO ============
 // Bun carga automáticamente el archivo .env del directorio actual
@@ -143,7 +143,7 @@ function startCodeAgentCLI() {
 
 // ============ MAIN ============
 function main() {
-  console.log(`🔧 MCP Builder\n`);
+  console.log('🔧 MCP Builder\n');
 
   const catalog = loadCatalog();
   const selectedMcps = parseArgs(catalog);

@@ -13,8 +13,8 @@
  * Output: kata-manifest.json in project root
  */
 
-import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'fs';
-import { basename, join, relative } from 'path';
+import { existsSync, readdirSync, readFileSync, statSync, watch, writeFileSync } from 'node:fs';
+import { basename, join, relative } from 'node:path';
 
 // ============================================================================
 // Types
@@ -151,7 +151,8 @@ function extractPreconditionMethods(filePath: string): string[] {
   // Pattern: async methodName( - public methods (must start with lowercase letter)
   const methodPattern = /^\s*async\s+([a-z][a-zA-Z0-9]*)\s*\(/gm;
 
-  let match;
+  let match: RegExpExecArray | null;
+
   while ((match = methodPattern.exec(content)) !== null) {
     const methodName = match[1];
     // Exclude constructor and private methods (starting with _)
