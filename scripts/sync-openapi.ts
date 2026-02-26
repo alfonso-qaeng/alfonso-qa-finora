@@ -13,10 +13,10 @@
  * Configuration is stored in: api/.openapi-config.json
  */
 
-import { execSync, spawnSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { createInterface } from 'readline';
+import { execSync, spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 
 // ============================================
 // Configuration
@@ -40,10 +40,10 @@ interface OpenAPIConfig {
 
 function log(message: string, type: 'info' | 'success' | 'error' | 'warn' = 'info') {
   const icons = {
-    info: '\x1b[36mℹ\x1b[0m',
-    success: '\x1b[32m✓\x1b[0m',
-    error: '\x1b[31m✗\x1b[0m',
-    warn: '\x1b[33m⚠\x1b[0m',
+    info: '\x1B[36mℹ\x1B[0m',
+    success: '\x1B[32m✓\x1B[0m',
+    error: '\x1B[31m✗\x1B[0m',
+    warn: '\x1B[33m⚠\x1B[0m',
   };
   console.log(`${icons[type]} ${message}`);
 }
@@ -85,7 +85,7 @@ function saveConfig(config: OpenAPIConfig): void {
   log(`Configuration saved to ${CONFIG_FILE}`, 'success');
 }
 
-function prompt(question: string, defaultValue?: string): Promise<string> {
+async function prompt(question: string, defaultValue?: string): Promise<string> {
   return new Promise(resolve => {
     const rl = createInterface({
       input: process.stdin,
@@ -106,7 +106,7 @@ function prompt(question: string, defaultValue?: string): Promise<string> {
 // ============================================
 
 async function getConfigInteractive(): Promise<OpenAPIConfig> {
-  console.log('\n\x1b[1m📋 OpenAPI Sync Configuration\x1b[0m\n');
+  console.log('\n\x1B[1m📋 OpenAPI Sync Configuration\x1B[0m\n');
 
   const repo = await prompt('GitHub repository (owner/repo)', 'org/backend-repo');
   const branch = await prompt('Branch name', 'main');
@@ -159,7 +159,7 @@ function downloadOpenAPI(config: OpenAPIConfig): boolean {
     log(`OpenAPI specification saved to ${OPENAPI_FILE}`, 'success');
     return true;
   } catch (error) {
-    log(`Download failed: ${error}`, 'error');
+    log(`Download failed: ${String(error)}`, 'error');
     return false;
   }
 }
@@ -193,7 +193,7 @@ async function generateTypes(): Promise<boolean> {
     log(`TypeScript types generated at ${TYPES_FILE}`, 'success');
     return true;
   } catch (error) {
-    log(`Type generation failed: ${error}`, 'error');
+    log(`Type generation failed: ${String(error)}`, 'error');
     return false;
   }
 }
@@ -203,8 +203,8 @@ async function generateTypes(): Promise<boolean> {
 // ============================================
 
 async function main() {
-  console.log('\n\x1b[1m🔄 OpenAPI Sync Tool\x1b[0m');
-  console.log('━'.repeat(40) + '\n');
+  console.log('\n\x1B[1m🔄 OpenAPI Sync Tool\x1B[0m');
+  console.log(`${'━'.repeat(40)}\n`);
 
   // Check prerequisites
   if (!checkGhCli()) {
@@ -282,11 +282,11 @@ Examples:
     await generateTypes();
   }
 
-  console.log('\n' + '━'.repeat(40));
+  console.log(`\n${'━'.repeat(40)}`);
   log('OpenAPI sync completed!', 'success');
 
   console.log(`
-\x1b[1mNext steps:\x1b[0m
+\x1B[1mNext steps:\x1B[0m
 1. Configure MCP OpenAPI server in your .mcp.json:
    {
      "mcpServers": {

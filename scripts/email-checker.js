@@ -196,7 +196,9 @@ function output(data) {
 
 function errorExit(message, hint = null) {
   const error = { success: false, error: message };
-  if (hint) error.hint = hint;
+  if (hint) {
+    error.hint = hint;
+  }
   output(error);
   process.exit(1);
 }
@@ -244,15 +246,19 @@ async function commandInbox(options) {
   const params = new URLSearchParams();
 
   if (options.limit) {
-    const limit = parseInt(options.limit);
-    if (isNaN(limit) || limit < 1 || limit > 100) {
+    const limit = Number.parseInt(options.limit);
+    if (Number.isNaN(limit) || limit < 1 || limit > 100) {
       errorExit('Invalid --limit value', 'Must be a number between 1 and 100');
     }
     params.set('limit', limit.toString());
   }
 
-  if (options.after) params.set('after', options.after);
-  if (options.before) params.set('before', options.before);
+  if (options.after) {
+    params.set('after', options.after);
+  }
+  if (options.before) {
+    params.set('before', options.before);
+  }
 
   const queryString = params.toString();
   const endpoint = `/emails/receiving${queryString ? `?${queryString}` : ''}`;
@@ -352,7 +358,7 @@ async function commandStatus(positional) {
         from: email.from,
         subject: email.subject,
         status: email.last_event,
-        isDelivered: isDelivered,
+        isDelivered,
         sentAt: email.created_at,
         scheduledAt: email.scheduled_at,
       },
@@ -385,7 +391,7 @@ async function commandAttachments(positional) {
       success: true,
       command: 'attachments',
       data: {
-        emailId: emailId,
+        emailId,
         count: response.data?.length || 0,
         attachments: (response.data || []).map(att => ({
           id: att.id,
@@ -419,8 +425,8 @@ async function commandDownload(positional) {
       success: true,
       command: 'download',
       data: {
-        emailId: emailId,
-        attachmentId: attachmentId,
+        emailId,
+        attachmentId,
         filename: response.filename,
         contentType: response.content_type,
         content: response.content,
@@ -442,7 +448,7 @@ async function commandSearch(positional, options) {
   }
 
   const field = options.field || 'subject';
-  const limit = parseInt(options.limit) || 50;
+  const limit = Number.parseInt(options.limit) || 50;
 
   if (!['from', 'subject'].includes(field)) {
     errorExit('Invalid --field value', "Must be 'from' or 'subject'");
@@ -462,8 +468,8 @@ async function commandSearch(positional, options) {
       success: true,
       command: 'search',
       data: {
-        query: query,
-        field: field,
+        query,
+        field,
         scanned: emails.length,
         matchCount: matches.length,
         matches: matches.map(email => ({
@@ -534,10 +540,12 @@ TYPICAL WORKFLOW:
 // ============================================================================
 
 function formatBytes(bytes) {
-  if (!bytes || bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) {
+    return '0 B';
+  }
   const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+  return `${(bytes / 1024 ** i).toFixed(1)} ${units[i]}`;
 }
 
 // ============================================================================
